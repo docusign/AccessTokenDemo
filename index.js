@@ -116,13 +116,27 @@ DS.getOrgId = async function _getOrgId(accessToken) {
 };
 
 
-// Main code execution
-(async function () {
+// Main code execution - this will execute immediately after being read
+(async ()=> {
     await DS.getJWT();
     await DS.getUserInfo(accessToken);
     await DS.getOrgId(accessToken);
 
 })();
+
+
+
+
+// ****************************************** 
+// If your intention is to use this code in an export,
+// comment out the IIFE above and this instead: 
+
+// export default DS;
+
+// ******************************************
+
+
+
 
 /*
 
