@@ -6,7 +6,8 @@
   "dependencies": {
     "docusign-admin": "^1.0.0",
     "docusign-click": "^1.0.0",
-    "docusign-esign": "^5.12.0"
+    "docusign-esign": "^5.12.0",
+    "open": "^8.4.0"
   },
   "devDependencies": {},
   "scripts": {

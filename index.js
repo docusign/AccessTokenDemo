@@ -8,20 +8,29 @@ let clickApi = require("docusign-click");
 // call in fs (filesystem) module to point to a file on our hard disk
 let fs = require("fs/promises");
 
+// call in open module to use filesystem to open URLs
+let open = require("open");
+
 // call in the process.exit() function to stop the script for error handling
 const { exit } = require("process");
 
+
 // These are the variables we intend to set using today's javascript demo.
-var accessToken, expiry, accountId, organizationId, clickwraps, envelopes;
+var accessToken, expiry, accountId, refreshToken, organizationId, clickwraps, envelopes;
 
 //  These are on your apps and keys page at https://developers.docusign.com 
 let impersonationUserGuid = "";
 let integrationKey = "";
 
+// For Authorization Code Grant ONLY
+
+let secretKey = "";
+
 // 'signature' for eSignature, organization_read to retreive your OrgId 
 let scopes = "signature+organization_read+click.manage";
 
 // This is also set for for specific Integration key, found on the Apps and Keys page
+
 let redirectUri = "https://httpbin.org/get";
 
 // NOTE: change this to account.docusign.com for production
@@ -60,23 +69,23 @@ DS.getJWT = async function _getJWT() {
         accessToken = response.body.access_token;
 
         // Accessible JSON from module exports
-        return { "expiry" : expiry, "accessToken" : accessToken};
+        return { "expiry": expiry, "accessToken": accessToken };
 
     } catch (err) {
         // Let's check if there's even a response body before trying to parse it
-       if (err.response){      
-        // The time spent to find this line that took me more effort than I'd like to admit
+        if (err.response) {
+            // The time spent to find this line that took me more effort than I'd like to admit
 
-        if (err.response.body.error == "consent_required") {
-            console.log("Consent required");
-            // Interesting quirk - any user can grant consent for
-            // their user GUID through your integration key's URL
-            console.log("Consent URL: " + consentUrl);
-
-            // Exit since we cannot run further API calls
-            exit(0);
-        }
-     } else {
+            if (err.response.body.error == "consent_required") {
+                console.log("Consent required");
+                // Interesting quirk - any user can grant consent for
+                // their user GUID through your integration key's URL
+                console.log("Consent URL: " + consentUrl);
+                await open(consentUrl, {wait: true});
+                // Exit since we cannot run further API calls
+                exit(0);
+            }
+        } else {
 
             // Something else has gone wrong, let's halt execution further
             console.error(err);
@@ -103,12 +112,63 @@ DS.getUserInfo = async function _getUserInfo(accessToken) {
         accountId = response.accounts[0].accountId
 
         // Accessible JSON from module exports
-        return { "accountId" : accountId } ;
+        return { "accountId": accountId };
 
-    }  catch (err) {
+    } catch (err) {
         console.error(err);
     };
 };
+
+// Sets the accessToken, expiry, and refresh token variables
+DS.getAuthCodeGrantToken = async function _getAuthCodeGrantToken() {
+    // start webserver
+    console.log("Listening on Port 5000");
+    const http = require('http');
+    http.createServer(async function (req, res) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.write('Received Authorization Code, You may close this window now');
+        res.end();
+
+        if (req.url.includes("code=")) {
+            let rawResult = req.url.toString();
+            let authorizationCode = rawResult.replace("/?code=", "");
+            console.log("Authorization Code is:", authorizationCode);
+
+
+            try {
+                let apiClient = new docusign.ApiClient();
+                apiClient.setOAuthBasePath(oAuthBasePath);
+                let response = await apiClient.generateAccessToken(integrationKey, secretKey, authorizationCode);
+                // Show the API response 
+                console.log(response);
+
+                // Save the expiration time, accessToken, and refreshToken variables
+                expiry = response.expiresIn;
+
+                // A token is a token is a token!  This Access token will work just the same will other API calls below
+                accessToken = response.accessToken;
+
+                // Access tokens provided by Authorization Code Grant will last for 8 hours. 
+                // Use this refresh token to allow them to generate a new one without needing 
+                // to login again. The refresh token is valid for 30 days.
+                refreshToken = response.refreshToken;
+
+                // Accessible JSON from module exports
+                return { "expiry": expiry, "accessToken": accessToken, "refreshToken": refreshToken };
+            }
+            catch (err) {
+                console.log(err);
+                exit(1);
+            }
+        }
+
+    }).listen(5000);
+    // Use the consent URL to login
+    await open(`https://${oAuthBasePath}/oauth/auth?response_type=code&scope=${scopes}&client_id=${integrationKey}&redirect_uri=http://localhost:5000`, {wait: true});
+
+}
+
+
 
 // Sets the Organziation ID variable
 DS.getOrgId = async function _getOrgId(accessToken) {
@@ -127,18 +187,18 @@ DS.getOrgId = async function _getOrgId(accessToken) {
 
         // Show the API Response
         console.log(response);
-        
+
         // Save the Organization ID to a variable IF we belong to an organization
-        if (response.organizations.length > 0 ){
+        if (response.organizations.length > 0) {
             organizationId = response.organizations[0].id;
 
             // Accessible JSON from module exports
-            return { "organizationId" : organizationId };
+            return { "organizationId": organizationId };
         }
         else {
             console.log("User does not belong to an organization");
         }
-        
+
 
 
     } catch (err) {
@@ -156,7 +216,7 @@ DS.getEnvelopes = async function _getEnvelopes(accessToken, accountId) {
         const msSinceEpoch = (new Date()).getTime();
         // 720 hours OR 30 days ago
         const thirtyDaysAgo = new Date(msSinceEpoch - 720 * 60 * 60 * 1000).toISOString();
-        let options = {fromDate: thirtyDaysAgo};
+        let options = { fromDate: thirtyDaysAgo };
 
         let response = await envelopesApi.listStatusChanges(accountId, options);
 
@@ -194,12 +254,14 @@ DS.getClickwraps = async function _getClickwraps(accessToken, accountId) {
 
 
 // Main code execution - this will execute immediately after being read
-(async ()=> {
+(async () => {
+
+    //await DS.getAuthCodeGrantToken();
     await DS.getJWT();
     await DS.getUserInfo(accessToken);
-    await DS.getOrgId(accessToken);
+    // await DS.getOrgId(accessToken);
     await DS.getEnvelopes(accessToken, accountId);
-    await DS.getClickwraps(accessToken, accountId);
+    // await DS.getClickwraps(accessToken, accountId);
 })();
 
 
@@ -224,11 +286,11 @@ DS.getClickwraps = async function _getClickwraps(accessToken, accountId) {
 /*
 
 ******************************************
- LONGHANDED CALLBACK oldschool sort-of way. 
+ LONGHANDED CALLBACK oldschool sort-of way.
  IIFE (as above) is easier to read!
 
  JS is non blocking which means callbacks, promises,
- or async/await. I went async/await, but this 
+ or async/await. I went async/await, but this
  is how it would work using promises:
 ******************************************
 
