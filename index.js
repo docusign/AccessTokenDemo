@@ -27,7 +27,7 @@ let integrationKey = "";
 let secretKey = "";
 
 // 'signature' for eSignature, organization_read to retreive your OrgId 
-let scopes = "signature+organization_read+click.manage";
+let scopes = "signature+organization_read+click.manage+user_write";
 
 // This is also set for for specific Integration key, found on the Apps and Keys page
 
@@ -206,6 +206,74 @@ DS.getOrgId = async function _getOrgId(accessToken) {
     };
 };
 
+
+DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organizationId){
+
+    try {
+
+        let adminClient = new adminApi.ApiClient();
+        // The Admin API uses a Different base path
+        adminClient.setBasePath("https://api-d.docusign.net/management");
+        adminClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`);
+
+        // Instantiate the DocuSign Admin's Accounts API
+        let bulkImports = new adminApi.BulkImportsApi(adminClient); 
+
+        // This bulk imports file is just a text file with an import guid on each line, no quotes
+        let textFile = await fs.readFile('bulkImports.txt', "utf-8");
+        const lines = textFile.split(/\r?\n/);
+
+        lines.forEach(async (line)=>{  
+            let response = await bulkImports.deleteBulkUserImport(organizationId, line, (response)=>{
+                console.log("deleting record for", line, response);
+            });
+            
+        })
+
+
+
+    } catch (err) {
+      console.log(err)  
+    }
+
+};
+
+
+
+// Main code execution - this will execute immediately after being read
+(async () => {
+
+    // await DS.getJWT();
+    // await DS.getUserInfo(accessToken);
+    // await DS.getOrgId(accessToken);
+    await DS.deleteBulkImportIds(accessToken, organizationId);
+    // await DS.getEnvelopes(accessToken, accountId);
+    // await DS.getClickwraps(accessToken, accountId);
+})();
+
+
+
+
+// ****************************************** 
+// OR - If your intention is to use this code in an export,
+// comment out the IIFE above and this instead: 
+
+// module.exports.DS = DS;
+
+// THEN try this in your terminal REPL or your external file:
+
+// const DS = require("./index.js");
+// DS.DS.getJWT().then( done => {console.log(done.accessToken)});
+
+// ******************************************
+
+
+
+
+/*
+
+
+
 DS.getEnvelopes = async function _getEnvelopes(accessToken, accountId) {
     try {
         let apiClient = new docusign.ApiClient();
@@ -253,37 +321,7 @@ DS.getClickwraps = async function _getClickwraps(accessToken, accountId) {
 };
 
 
-// Main code execution - this will execute immediately after being read
-(async () => {
 
-    //await DS.getAuthCodeGrantToken();
-    await DS.getJWT();
-    await DS.getUserInfo(accessToken);
-    // await DS.getOrgId(accessToken);
-    await DS.getEnvelopes(accessToken, accountId);
-    // await DS.getClickwraps(accessToken, accountId);
-})();
-
-
-
-
-// ****************************************** 
-// OR - If your intention is to use this code in an export,
-// comment out the IIFE above and this instead: 
-
-// module.exports.DS = DS;
-
-// THEN try this in your terminal REPL or your external file:
-
-// const DS = require("./index.js");
-// DS.DS.getJWT().then( done => {console.log(done.accessToken)});
-
-// ******************************************
-
-
-
-
-/*
 
 ******************************************
  LONGHANDED CALLBACK oldschool sort-of way.
