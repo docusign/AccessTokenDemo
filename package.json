@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
-    "docusign-admin": "^1.0.0",
-    "docusign-click": "^1.0.0",
-    "docusign-esign": "^5.12.0",
+    "docusign-admin": "^1.0.2",
+    "docusign-click": "^1.1.0",
+    "docusign-esign": "^5.16.0",
     "open": "^8.4.0"
   },
   "devDependencies": {},
