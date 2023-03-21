@@ -404,13 +404,18 @@ DS.getAccount = function _getAccount(accessToken, accountId) {
     const authCodeGrantTokenResult = await DS.getAuthCodeGrantToken();
     accessToken = authCodeGrantTokenResult.accessToken
     console.log("accessToken " + accessToken)
+    
+    exit(0);
+    
     const userInfo = await DS.getUserInfo(accessToken);
     console.log("userInfo" + JSON.stringify(userInfo));
-    await DS.refreshAccessToken(integrationKey, secretKey, authCodeGrantTokenResult.refreshToken);
+
+    exit(0);
     
     const sentEnvelope = await DS.sendEnvelope(accessToken, userInfo.accountId, emailAddy);
     console.log("Sent Envelope: " + JSON.stringify(sentEnvelope));
     exit(0);
+    await DS.refreshAccessToken(integrationKey, secretKey, authCodeGrantTokenResult.refreshToken);
     await DS.getEnvelopes(accessToken, userInfo.accountId);
     await DS.getOrgId(accessToken);
     await DS.getClickwraps(accessToken, userInfo.accountId);
