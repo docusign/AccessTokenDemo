@@ -81,7 +81,7 @@ DS.getJWT = async function _getJWT() {
                 // Interesting quirk - any user can grant consent for
                 // their user GUID through your integration key's URL
                 console.log("Consent URL: " + consentUrl);
-                await open(consentUrl, {wait: true});
+                await open(consentUrl, { wait: true });
                 // Exit since we cannot run further API calls
                 exit(0);
             }
@@ -89,16 +89,14 @@ DS.getJWT = async function _getJWT() {
 
             // Something else has gone wrong, let's halt execution further
             console.error(err);
-            exit(0);
+            exit(1);
         }
     }
 }
 
-
-
 // Sets the Account Id variable
 DS.getUserInfo = async function _getUserInfo(accessToken) {
-    try {
+
         let apiClient = new docusign.ApiClient();
         apiClient.setOAuthBasePath(oAuthBasePath);
 
@@ -112,15 +110,16 @@ DS.getUserInfo = async function _getUserInfo(accessToken) {
         accountId = response.accounts[0].accountId
 
         // Accessible JSON from module exports
-        return { "accountId": accountId };
+        return new Promise(async resolve => {
+            resolve( { "accountId": accountId })
+    
+});
+    }
 
-    } catch (err) {
-        console.error(err);
-    };
-};
 
 // Sets the accessToken, expiry, and refresh token variables
 DS.getAuthCodeGrantToken = async function _getAuthCodeGrantToken() {
+    return new Promise(async (resolve, reject) => {
     // start webserver
     console.log("Listening on Port 5000");
     const http = require('http');
@@ -154,21 +153,21 @@ DS.getAuthCodeGrantToken = async function _getAuthCodeGrantToken() {
                 refreshToken = response.refreshToken;
 
                 // Accessible JSON from module exports
-                return { "expiry": expiry, "accessToken": accessToken, "refreshToken": refreshToken };
+                return resolve({ "expiry": expiry, "accessToken": accessToken, "refreshToken": refreshToken });
             }
             catch (err) {
                 console.log(err);
-                exit(1);
+                return reject(err);
             }
         }
 
     }).listen(5000);
     // Use the consent URL to login
-    await open(`https://${oAuthBasePath}/oauth/auth?response_type=code&scope=${scopes}&client_id=${integrationKey}&redirect_uri=http://localhost:5000`, {wait: true});
+    await open(`https://${oAuthBasePath}/oauth/auth?response_type=code&scope=${scopes}&client_id=${integrationKey}&redirect_uri=http://localhost:5000`, {wait: true})
+    
 
-}
-
-
+});
+};
 
 // Sets the Organziation ID variable
 DS.getOrgId = async function _getOrgId(accessToken) {
@@ -206,7 +205,6 @@ DS.getOrgId = async function _getOrgId(accessToken) {
     };
 };
 
-
 DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organizationId){
 
     try {
@@ -237,42 +235,6 @@ DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organi
     }
 
 };
-
-
-
-// Main code execution - this will execute immediately after being read
-(async () => {
-
-    // await DS.getJWT();
-    // await DS.getUserInfo(accessToken);
-    // await DS.getOrgId(accessToken);
-    await DS.deleteBulkImportIds(accessToken, organizationId);
-    // await DS.getEnvelopes(accessToken, accountId);
-    // await DS.getClickwraps(accessToken, accountId);
-})();
-
-
-
-
-// ****************************************** 
-// OR - If your intention is to use this code in an export,
-// comment out the IIFE above and this instead: 
-
-// module.exports.DS = DS;
-
-// THEN try this in your terminal REPL or your external file:
-
-// const DS = require("./index.js");
-// DS.DS.getJWT().then( done => {console.log(done.accessToken)});
-
-// ******************************************
-
-
-
-
-/*
-
-
 
 DS.getEnvelopes = async function _getEnvelopes(accessToken, accountId) {
     try {
@@ -321,8 +283,42 @@ DS.getClickwraps = async function _getClickwraps(accessToken, accountId) {
 };
 
 
+// go live populated transactions test
+DS.getAccount =  function _getAccount(accessToken, accountId) {
+    try {
+
+        let apiClient = new docusign.ApiClient();
+        apiClient.setBasePath(ApiBasePath + "/restapi");
+        apiClient.addDefaultHeader("Authorization", `Bearer ${accessToken}`);
+
+        let accounts = new docusign.AccountsApi(apiClient);
+        let response = accounts.getAccountInformation(accountId);
+
+        // Show the API response
+        console.log(response);
+    } catch (err) {
+        console.error(err);
+    };
+};
+
+// Main code execution - this will execute immediately after being read
+(async () => {
+
+    //await DS.getJWT();
+    const authCodeGrantTokenResult = await DS.getAuthCodeGrantToken();
+    accessToken = authCodeGrantTokenResult.accessToken
+    console.log("accessToken " + accessToken)
+    const userInfo = await DS.getUserInfo(accessToken);
+    console.log("userInfo" + JSON.stringify(userInfo));
+    exit(0);
+    await DS.getOrgId(accessToken);
+    await DS.getEnvelopes(accessToken, userInfo.accountId);
+    await DS.getClickwraps(accessToken, userInfo.accountId);
+    
+})();
 
 
+/*
 ******************************************
  LONGHANDED CALLBACK oldschool sort-of way.
  IIFE (as above) is easier to read!
