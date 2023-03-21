@@ -46,6 +46,7 @@ let ApiBasePath = "https://demo.docusign.net";
 // request user token method will continue to return 'consent_required'. 
 let consentUrl = `https://${oAuthBasePath}/oauth/auth?response_type=code&scope=impersonation+${scopes}&client_id=${integrationKey}&redirect_uri=${redirectUri}`;
 
+let emailAddy = "apiofficehours@gmail.com";
 
 // Setting a global DocuSign (DS) object so we can reuse the function elsewhere.
 let DS = {};
@@ -236,6 +237,63 @@ DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organi
 
 };
 
+DS.sendEnvelope = async function _sendEnvelope(accessToken, accountId, emailAddy) {
+    try {
+        let apiClient = new docusign.ApiClient();
+        apiClient.setBasePath(ApiBasePath + "/restapi");
+        apiClient.addDefaultHeader("Authorization", `Bearer ${accessToken}`);
+
+        let envelopesApi = new docusign.EnvelopesApi(apiClient);
+
+        let envelopeDefinition = new docusign.EnvelopeDefinition();
+        envelopeDefinition.emailSubject = "Please sign this document";
+        envelopeDefinition.status = "sent";
+
+        let doc = new docusign.Document();
+        doc.documentBase64 = await fs.readFile("document.pdf", { encoding: "base64" });
+        doc.name = "Sample Document";
+        doc.fileExtension = "pdf";
+        doc.documentId = "1";
+
+        envelopeDefinition.documents = [doc];
+
+        let signer = new docusign.Signer();
+        signer.email = emailAddy;
+        signer.name = "John Doe";
+        signer.recipientId = "1";
+        signer.routingOrder = "1";
+
+        let signHere = new docusign.SignHere();
+        signHere.documentId = "1";
+        signHere.pageNumber = "1";
+        signHere.recipientId = "1";
+        signHere.tabLabel = "SignHereTab";
+        signHere.anchorString = "/sn1/";
+        signHere.anchorUnits = "pixels";
+        signHere.anchorXOffset = "20";
+        signHere.anchorYOffset = "10";
+
+
+        let tabs = new docusign.Tabs();
+        tabs.signHereTabs = [signHere];
+        signer.tabs = tabs;
+
+        let recipients = new docusign.Recipients();
+        recipients.signers = [signer];
+        envelopeDefinition.recipients = recipients;
+
+        let response = await envelopesApi.createEnvelope(accountId, { envelopeDefinition: envelopeDefinition });
+
+        // Show the API response
+        console.log(response);
+
+        return { "response": response };
+    } catch (err) {
+        console.error(err);
+    }
+};
+
+
 DS.getEnvelopes = async function _getEnvelopes(accessToken, accountId) {
     try {
         let apiClient = new docusign.ApiClient();
@@ -310,9 +368,12 @@ DS.getAccount =  function _getAccount(accessToken, accountId) {
     console.log("accessToken " + accessToken)
     const userInfo = await DS.getUserInfo(accessToken);
     console.log("userInfo" + JSON.stringify(userInfo));
+    const sentEnvelope = await DS.sendEnvelope(accessToken, userInfo.accountId);
+    console.log("Sent Envelope: " + JSON.stringify(sentEnvelope));
+    await DS.getEnvelopes(accessToken, userInfo.accountId);       
+    
     exit(0);
     await DS.getOrgId(accessToken);
-    await DS.getEnvelopes(accessToken, userInfo.accountId);
     await DS.getClickwraps(accessToken, userInfo.accountId);
     
 })();
