@@ -14,6 +14,8 @@ let open = require("open");
 // call in the process.exit() function to stop the script for error handling
 const { exit } = require("process");
 
+// Fill in an email address here to sign a demo document
+let emailAddy = "";
 
 // These are the variables we intend to set using today's javascript demo.
 var accessToken, expiry, accountId, refreshToken, organizationId, clickwraps, envelopes;
@@ -23,7 +25,6 @@ let impersonationUserGuid = "";
 let integrationKey = "";
 
 // For Authorization Code Grant ONLY
-
 let secretKey = "";
 
 // 'signature' for eSignature, organization_read to retreive your OrgId 
@@ -46,7 +47,7 @@ let ApiBasePath = "https://demo.docusign.net";
 // request user token method will continue to return 'consent_required'. 
 let consentUrl = `https://${oAuthBasePath}/oauth/auth?response_type=code&scope=impersonation+${scopes}&client_id=${integrationKey}&redirect_uri=${redirectUri}`;
 
-let emailAddy = "apiofficehours@gmail.com";
+
 
 // Setting a global DocuSign (DS) object so we can reuse the function elsewhere.
 let DS = {};
@@ -98,77 +99,114 @@ DS.getJWT = async function _getJWT() {
 // Sets the Account Id variable
 DS.getUserInfo = async function _getUserInfo(accessToken) {
 
-        let apiClient = new docusign.ApiClient();
-        apiClient.setOAuthBasePath(oAuthBasePath);
+    let apiClient = new docusign.ApiClient();
+    apiClient.setOAuthBasePath(oAuthBasePath);
 
-        // Let's get the API Account ID
-        let response = await apiClient.getUserInfo(accessToken);
+    // Let's get the API Account ID
+    let response = await apiClient.getUserInfo(accessToken);
 
-        // Show the API Response
-        console.log(response);
+    // Show the API Response
+    console.log(response);
 
-        // Save the API Account ID to a variable
-        accountId = response.accounts[0].accountId
+    // Save the API Account ID to a variable
+    accountId = response.accounts[0].accountId
 
-        // Accessible JSON from module exports
-        return new Promise(async resolve => {
-            resolve( { "accountId": accountId })
-    
-});
-    }
+    // Accessible JSON from module exports
+    return new Promise(async resolve => {
+        resolve({ "accountId": accountId })
+
+    });
+}
 
 
 // Sets the accessToken, expiry, and refresh token variables
 DS.getAuthCodeGrantToken = async function _getAuthCodeGrantToken() {
     return new Promise(async (resolve, reject) => {
-    // start webserver
-    console.log("Listening on Port 5000");
-    const http = require('http');
-    http.createServer(async function (req, res) {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.write('Received Authorization Code, You may close this window now');
-        res.end();
+        // start webserver
+        console.log("Listening on Port 5000");
+        const http = require('http');
+        http.createServer(async function (req, res) {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.write('Received Authorization Code, You may close this window now');
+            res.end();
 
-        if (req.url.includes("code=")) {
-            let rawResult = req.url.toString();
-            let authorizationCode = rawResult.replace("/?code=", "");
-            console.log("Authorization Code is:", authorizationCode);
+            if (req.url.includes("code=")) {
+                let rawResult = req.url.toString();
+                let authorizationCode = rawResult.replace("/?code=", "");
+                console.log("Authorization Code is:", authorizationCode);
 
 
-            try {
-                let apiClient = new docusign.ApiClient();
-                apiClient.setOAuthBasePath(oAuthBasePath);
-                let response = await apiClient.generateAccessToken(integrationKey, secretKey, authorizationCode);
-                // Show the API response 
-                console.log(response);
+                try {
+                    let apiClient = new docusign.ApiClient();
+                    apiClient.setOAuthBasePath(oAuthBasePath);
+                    let response = await apiClient.generateAccessToken(integrationKey, secretKey, authorizationCode);
+                    // Show the API response 
+                    console.log(response);
 
-                // Save the expiration time, accessToken, and refreshToken variables
-                expiry = response.expiresIn;
+                    // Save the expiration time, accessToken, and refreshToken variables
+                    expiry = response.expiresIn;
 
-                // A token is a token is a token!  This Access token will work just the same will other API calls below
-                accessToken = response.accessToken;
+                    // A token is a token is a token!  This Access token will work just the same will other API calls below
+                    accessToken = response.accessToken;
 
-                // Access tokens provided by Authorization Code Grant will last for 8 hours. 
-                // Use this refresh token to allow them to generate a new one without needing 
-                // to login again. The refresh token is valid for 30 days.
-                refreshToken = response.refreshToken;
+                    // Access tokens provided by Authorization Code Grant will last for 8 hours. 
+                    // Use this refresh token to allow them to generate a new one without needing 
+                    // to login again. The refresh token is valid for 30 days.
+                    refreshToken = response.refreshToken;
 
-                // Accessible JSON from module exports
-                return resolve({ "expiry": expiry, "accessToken": accessToken, "refreshToken": refreshToken });
+                    // Accessible JSON from module exports
+                    return resolve({ "expiry": expiry, "accessToken": accessToken, "refreshToken": refreshToken });
+                }
+                catch (err) {
+                    console.log(err);
+                    return reject(err);
+                }
             }
-            catch (err) {
-                console.log(err);
-                return reject(err);
-            }
-        }
 
-    }).listen(5000);
-    // Use the consent URL to login
-    await open(`https://${oAuthBasePath}/oauth/auth?response_type=code&scope=${scopes}&client_id=${integrationKey}&redirect_uri=http://localhost:5000`, {wait: true})
-    
+        }).listen(5000);
+        // Use the consent URL to login
+        await open(`https://${oAuthBasePath}/oauth/auth?response_type=code&scope=${scopes}&client_id=${integrationKey}&redirect_uri=http://localhost:5000`, { wait: true })
 
-});
+
+    });
 };
+
+// Sets the accessToken, expiry, and refresh token variables
+const axios = require('axios');
+
+DS.refreshAccessToken = async function _refreshAccessToken(clientId, clientSecret, refreshToken) {
+    const tokenEndpoint = 'https://account-d.docusign.com/oauth/token';
+
+    // Prepare the request body and header
+    const requestBody = new URLSearchParams();
+    requestBody.append('grant_type', 'refresh_token');
+    requestBody.append('refresh_token', refreshToken);
+
+    const authHeaderValue = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+    const config = {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Basic ${authHeaderValue}`,
+        },
+    };
+
+    try {
+        const response = await axios.post(tokenEndpoint, requestBody, config);
+        const { access_token, refresh_token, expires_in } = response.data;
+
+        console.log('New access token:', access_token);
+        console.log('New refresh token:', refresh_token);
+        console.log('Expires in:', expires_in);
+
+        // Save or return the new access token, refresh token, and expires_in as needed
+        return { access_token, refresh_token, expires_in };
+    } catch (error) {
+        console.error('Error refreshing access token:', error.response.data);
+        throw error;
+    }
+}
+
 
 // Sets the Organziation ID variable
 DS.getOrgId = async function _getOrgId(accessToken) {
@@ -206,7 +244,7 @@ DS.getOrgId = async function _getOrgId(accessToken) {
     };
 };
 
-DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organizationId){
+DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organizationId) {
 
     try {
 
@@ -216,23 +254,23 @@ DS.deleteBulkImportIds = async function _deleteBulkImportIds(accessToken, organi
         adminClient.addDefaultHeader('Authorization', `Bearer ${accessToken}`);
 
         // Instantiate the DocuSign Admin's Accounts API
-        let bulkImports = new adminApi.BulkImportsApi(adminClient); 
+        let bulkImports = new adminApi.BulkImportsApi(adminClient);
 
         // This bulk imports file is just a text file with an import guid on each line, no quotes
         let textFile = await fs.readFile('bulkImports.txt', "utf-8");
         const lines = textFile.split(/\r?\n/);
 
-        lines.forEach(async (line)=>{  
-            let response = await bulkImports.deleteBulkUserImport(organizationId, line, (response)=>{
+        lines.forEach(async (line) => {
+            let response = await bulkImports.deleteBulkUserImport(organizationId, line, (response) => {
                 console.log("deleting record for", line, response);
             });
-            
+
         })
 
 
 
     } catch (err) {
-      console.log(err)  
+        console.log(err)
     }
 
 };
@@ -342,7 +380,7 @@ DS.getClickwraps = async function _getClickwraps(accessToken, accountId) {
 
 
 // go live populated transactions test
-DS.getAccount =  function _getAccount(accessToken, accountId) {
+DS.getAccount = function _getAccount(accessToken, accountId) {
     try {
 
         let apiClient = new docusign.ApiClient();
@@ -368,14 +406,15 @@ DS.getAccount =  function _getAccount(accessToken, accountId) {
     console.log("accessToken " + accessToken)
     const userInfo = await DS.getUserInfo(accessToken);
     console.log("userInfo" + JSON.stringify(userInfo));
-    const sentEnvelope = await DS.sendEnvelope(accessToken, userInfo.accountId);
-    console.log("Sent Envelope: " + JSON.stringify(sentEnvelope));
-    await DS.getEnvelopes(accessToken, userInfo.accountId);       
+    await DS.refreshAccessToken(integrationKey, secretKey, authCodeGrantTokenResult.refreshToken);
     
+    const sentEnvelope = await DS.sendEnvelope(accessToken, userInfo.accountId, emailAddy);
+    console.log("Sent Envelope: " + JSON.stringify(sentEnvelope));
     exit(0);
+    await DS.getEnvelopes(accessToken, userInfo.accountId);
     await DS.getOrgId(accessToken);
     await DS.getClickwraps(accessToken, userInfo.accountId);
-    
+
 })();
 
 
